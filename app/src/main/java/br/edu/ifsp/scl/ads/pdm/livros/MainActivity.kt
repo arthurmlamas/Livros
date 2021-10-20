@@ -9,10 +9,13 @@ import android.view.View
 import android.widget.AdapterView
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.LinearLayoutManager
 import br.edu.ifsp.scl.ads.pdm.livros.adapter.LivrosRvAdapter
+import br.edu.ifsp.scl.ads.pdm.livros.controller.LivroController
 import br.edu.ifsp.scl.ads.pdm.livros.databinding.ActivityMainBinding
 import br.edu.ifsp.scl.ads.pdm.livros.model.Livro
+import com.google.android.material.snackbar.Snackbar
 
 class MainActivity : AppCompatActivity(), OnLivroClickListener {
 
@@ -29,7 +32,14 @@ class MainActivity : AppCompatActivity(), OnLivroClickListener {
     private lateinit var editarLivroActivityResultLauncher: ActivityResultLauncher<Intent>
 
     // Data source
-    private val livrosList: MutableList<Livro> = mutableListOf()
+    private val livrosList: MutableList<Livro> by lazy {
+        livroController.buscarLivros()
+    }
+
+    // Controller
+    private val livroController: LivroController by lazy {
+        LivroController(this)
+    }
 
     // Adapter
     /*private val livrosAdapter: ArrayAdapter<String> by lazy {
@@ -65,9 +75,6 @@ class MainActivity : AppCompatActivity(), OnLivroClickListener {
         super.onCreate(savedInstanceState)
         setContentView(activityMainBinding.root)
 
-        // Inicializando lista de livros
-        inicializarLivrosList()
-
         // Associando Adapter e LayoutManger ao RecyclerView
         activityMainBinding.livrosRv.adapter = livrosAdapter
         activityMainBinding.livrosRv.layoutManager = livrosLayoutManager
@@ -83,6 +90,7 @@ class MainActivity : AppCompatActivity(), OnLivroClickListener {
         livroActivityResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { resultado ->
             if (resultado.resultCode == RESULT_OK) {
                 resultado.data?.getParcelableExtra<Livro>(EXTRA_LIVRO)?.apply {
+                    livroController.inserirLivro(this)
                     livrosList.add(this)
                     livrosAdapter.notifyDataSetChanged()
 
@@ -108,6 +116,7 @@ class MainActivity : AppCompatActivity(), OnLivroClickListener {
                 val posicao = resultado.data?.getIntExtra(EXTRA_POSICAO, -1)
                 resultado.data?.getParcelableExtra<Livro>(EXTRA_LIVRO)?.apply {
                     if (posicao != null && posicao != -1) {
+                        livroController.modificarLivro(this)
                         livrosList[posicao] = this
                         livrosAdapter.notifyDataSetChanged()
                     }
@@ -130,21 +139,6 @@ class MainActivity : AppCompatActivity(), OnLivroClickListener {
         }
     }
 
-    private fun inicializarLivrosList() {
-        for (indice in 1..10) {
-            livrosList.add(
-                Livro(
-                    "Título ${indice}",
-                    "ISBN ${indice}",
-                    "Primeiro autor ${indice}",
-                    "Editora ${indice}",
-                    indice,
-                    indice
-                )
-            )
-        }
-    }
-
     // ANTIGO
     /*override fun onCreateContextMenu(
         menu: ContextMenu?,
@@ -157,6 +151,7 @@ class MainActivity : AppCompatActivity(), OnLivroClickListener {
 
     override fun onContextItemSelected(item: MenuItem): Boolean {
         val posicao = livrosAdapter.posicao
+        val livro = livrosList[posicao]
 
         // ANTIGO
         // val posicao = (item.menuInfo as AdapterView.AdapterContextMenuInfo).position
@@ -164,7 +159,6 @@ class MainActivity : AppCompatActivity(), OnLivroClickListener {
         return when (item.itemId) {
             R.id.editarLivroMi -> {
                 // Editar livro
-                val livro = livrosList[posicao]
                 // Toast.makeText(this, "${livro}", Toast.LENGTH_SHORT).show()
                 val editarLivroIntent = Intent(this, LivroActivity::class.java)
                 editarLivroIntent.putExtra(EXTRA_LIVRO, livro)
@@ -175,8 +169,19 @@ class MainActivity : AppCompatActivity(), OnLivroClickListener {
             }
             R.id.removerLivroMi -> {
                 // Remover livro
-                livrosList.removeAt(posicao)
-                livrosAdapter.notifyDataSetChanged()
+                with(AlertDialog.Builder(this)) {
+                    setMessage("Confirma a remoção?")
+                    setPositiveButton("Sim") { _, _ ->
+                        livroController.apagarLivro(livro.titulo)
+                        livrosList.removeAt(posicao)
+                        livrosAdapter.notifyDataSetChanged()
+                        Snackbar.make(activityMainBinding.root, "Livro removido", Snackbar.LENGTH_SHORT).show()
+                    }
+                    setNegativeButton("Não") { _, _ ->
+                        Snackbar.make(activityMainBinding.root, "Remoção cancelada", Snackbar.LENGTH_SHORT).show()
+                    }
+                    create()
+                }.show()
                 true
             }
             else -> { false }
